@@ -133,6 +133,13 @@ function deploy_hyperspace_node() {
             break
         else
             echo "添加模型时发生错误，正在重试..."
+            # 检查网络连接
+            if ping -q -c 1 -W 1 google.com >/dev/null; then
+                echo "网络连接正常，重试添加模型..."
+            else
+                echo "网络连接异常，正在重启网络服务..."
+                sudo systemctl restart networking
+            fi
             sleep 3
         fi
     done
