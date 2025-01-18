@@ -3,8 +3,8 @@
 # 脚本保存路径
 SCRIPT_PATH="$HOME/Hyperspace.sh"
 
-# 定义检查间隔时间（秒），15分钟 = 900秒
-CHECK_INTERVAL=900
+# 定义检查间隔时间（秒），2分钟 = 120秒
+CHECK_INTERVAL=120
 
 # 定义screen会话名称
 SCREEN_NAME="hyper"
@@ -15,19 +15,22 @@ LOG_FILE="/root/aios-cli.log"
 # 定义最大重试次数
 MAX_RETRIES=5
 
+# 确保环境变量已经生效
+echo "确保环境变量更新..."
+source /root/.bashrc
+
 # 主菜单函数
 function main_menu() {
     while true; do
         clear
-        echo "脚本由大赌社区哈哈哈哈编写，推特 @ferdie_jhovie，免费开源，请勿相信收费"
-        echo "如有问题，可联系推特，仅此只有一个号"
+        echo "推特 @0xqianyi，免费开源，请勿相信收费"
         echo "================================================================"
-        echo "退出脚本，请按键盘 ctrl + C 退出即可"
+        echo "退出脚本，请按键盘 ctrl + C 退出"
         echo "请选择要执行的操作:"
-        echo "1. 部署hyperspace节点"
-        echo "2. 查看日志"
+        echo "1. 部署hyperspace aiOS节点"
+        echo "2. 查看运行日志"
         echo "3. 查看积分"
-        echo "4. 删除节点（停止节点）"
+        echo "4. 删除节点"
         echo "5. 退出脚本"
         echo "================================================================"
         read -p "请输入选择 (1/2/3/4/5): " choice
@@ -42,6 +45,7 @@ function main_menu() {
         esac
     done
 }
+
 # 部署hyperspace节点
 function deploy_hyperspace_node() {
     # 执行安装命令
@@ -62,15 +66,15 @@ function deploy_hyperspace_node() {
         export PATH="$PATH:/root/.local/bin"
         if ! command -v aios-cli &> /dev/null; then
             echo "无法找到 aios-cli 命令，请手动运行 'source /root/.bashrc' 后重试"
-            read -n 1 -s -r -p "按任意键返回主菜单..."
+            read -n 1 -s -r -p "按任意键返回菜单..."
             return
         fi
     fi
-}
+
     # 提示输入屏幕名称，默认值为 'hyper'
-    read -p "请输入屏幕名称 (默认值: hyper): " screen_name
+    read -p "请输入会话名称 (默认值名称请按回车): " screen_name
     screen_name=${screen_name:-hyper}
-    echo "使用的屏幕名称是: $screen_name"
+    echo "使用的会话名称是: $screen_name"
 
     # 清理已存在的 'hyper' 屏幕会话
     echo "检查并清理现有的 'hyper' 屏幕会话..."
@@ -82,7 +86,8 @@ function deploy_hyperspace_node() {
     else
         echo "没有找到现有的 '$screen_name' 屏幕会话。"
     fi
-        # 创建一个新的屏幕会话
+
+    # 创建一个新的屏幕会话
     echo "创建一个名为 '$screen_name' 的屏幕会话..."
     screen -S "$screen_name" -dm
 
@@ -97,7 +102,8 @@ function deploy_hyperspace_node() {
     echo "退出屏幕会话 '$screen_name'..."
     screen -S "$screen_name" -X detach
     sleep 5
-        # 确保环境变量已经生效
+
+    # 确保环境变量已经生效
     echo "确保环境变量更新..."
     source /root/.bashrc
     sleep 4  # 等待4秒确保环境变量加载
@@ -108,7 +114,8 @@ function deploy_hyperspace_node() {
     # 提示用户输入私钥并保存为 my.pem 文件
     echo "请输入你的私钥（按 CTRL+D 结束）："
     cat > my.pem
-        # 使用 my.pem 文件运行 import-keys 命令
+
+    # 使用 my.pem 文件运行 import-keys 命令
     echo "正在使用 my.pem 文件运行 import-keys 命令..."
 
     # 运行 import-keys 命令
@@ -129,14 +136,20 @@ function deploy_hyperspace_node() {
             sleep 3
         fi
     done
-        # 登录并选择等级
+
+    # 登录并选择等级
     echo "正在登录并选择等级..."
 
     # 登录到 Hive
     aios-cli hive login
 
     # 提示用户选择等级
-    echo "请选择等级（1-5）："
+    echo "请选择节点等级（1-5）："
+    echo "1. 30GB"
+    echo "2. 20GB"
+    echo "3. 8GB"
+    echo "4. 4GB"
+    echo "5. 2GB"
     select tier in 1 2 3 4 5; do
         case $tier in
             1|2|3|4|5)
@@ -149,9 +162,12 @@ function deploy_hyperspace_node() {
                 ;;
         esac
     done
-        # 连接到 Hive
-    aios-cli hive connect
-    sleep 5
+
+    # 连接到 Hive
+    if ! aios-cli hive connect; then
+        echo "连接到 Hive 失败，正在尝试停止并重启节点..."
+        restart_node
+    fi
 
     # 停止 aios-cli 进程
     echo "使用 'aios-cli kill' 停止 'aios-cli start' 进程..."
@@ -162,13 +178,14 @@ function deploy_hyperspace_node() {
     screen -S "$screen_name" -X stuff "aios-cli start --connect >> /root/aios-cli.log 2>&1\n"
 
     echo "部署hyperspace节点完成，'aios-cli start --connect' 已在屏幕内运行，系统已恢复到后台。"
-        # 启动监控脚本
+
+    # 启动监控脚本
     start_monitoring
 }
 
 # 启动监控脚本
 function start_monitoring() {
-    echo "启动监控脚本，每15分钟检查一次节点状态..."
+    echo "启动监控脚本，每2分钟检查一次节点状态..."
 
     while true; do
         # 检查日志中的异常情况
@@ -179,10 +196,11 @@ function start_monitoring() {
             echo "Hyperspace节点正在运行，日志正常，无需操作。"
         fi
 
-        # 等待15分钟
+        # 等待2分钟
         sleep $CHECK_INTERVAL
     done
 }
+
 # 检查日志中的异常情况
 function check_log_for_errors() {
     echo "开始检查日志文件: $LOG_FILE"
@@ -220,6 +238,12 @@ function check_log_for_errors() {
     # 检查500内部服务器错误
     if grep -q "status: Internal, message: \"HTTP error: 500 Internal Server Error\"" "$LOG_FILE"; then
         echo "检测到500内部服务器错误"
+        return 1
+    fi
+
+    # 检查 Last pong received at 错误
+    if grep -q "Last pong received at" "$LOG_FILE"; then
+        echo "检测到 Last pong received at 错误"
         return 1
     fi
 
@@ -265,6 +289,7 @@ function restart_node() {
 
         # 清空日志文件
         > "$LOG_FILE"
+
         # 重新启动节点
         screen -S "$SCREEN_NAME" -dm bash -c "source /root/.bashrc && aios-cli start --connect >> $LOG_FILE 2>&1"
         echo "Hyperspace节点已重启，重试次数: $retries"
