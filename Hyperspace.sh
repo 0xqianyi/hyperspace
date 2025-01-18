@@ -3,88 +3,297 @@
 # 脚本保存路径
 SCRIPT_PATH="$HOME/Hyperspace.sh"
 
-# 新增监控和自动重启函数
-function monitor_and_restart() {
-    SERVICE_NAME="aios-cli"
-    CHECK_INTERVAL=900 # 15分钟检查一次
-    MAX_RETRY_TIME=900 # 最大重试时间为15分钟
-    LOG_FILE="/root/aios-cli.log"
-    LAST_SUCCESSFUL_PING_TIME=$(date +%s) # 初始化为当前时间
+# 定义检查间隔时间（秒），15分钟 = 900秒
+CHECK_INTERVAL=900
 
-    while true; do
-        CURRENT_TIME=$(date +%s)
-        
-        # 检查日志文件中是否有成功的Pong响应
-        if grep -q "Received pong" "$LOG_FILE"; then
-            echo "$(date): Found successful ping in log."
-            # 更新最后一次成功的ping时间
-            LAST_SUCCESSFUL_PONG_LINE=$(grep -oP "(?<=\[)[^]]+(?=]) Received pong" "$LOG_FILE" | tail -n 1)
-            LAST_SUCCESSFUL_PING_TIME=$(date -d "${LAST_SUCCESSFUL_PONG_LINE%%]*}" +%s)
-        else
-            echo "$(date): No successful ping found."
-        fi
-        
-        # 如果超过15分钟没有收到成功的pong响应，则认为连接异常
-        TIME_DIFF=$((CURRENT_TIME - LAST_SUCCESSFUL_PING_TIME))
-        if [ "$TIME_DIFF" -gt "$MAX_RETRY_TIME" ]; then
-            echo "$(date): No successful connection for over 15 minutes, restarting $SERVICE_NAME..."
-            
-            # 停止并重新启动节点
-            screen -S hyper -X stuff "killall $SERVICE_NAME\n"
-            sleep 10
-            screen -S hyper -X stuff "aios-cli start --connect >> $LOG_FILE 2>&1\n"
-            
-            # 更新最后一次成功的ping时间以避免立即再次重启
-            LAST_SUCCESSFUL_PING_TIME=$CURRENT_TIME
-        else
-            echo "$(date): Connection appears to be normal."
-        fi
-        
-        # 等待下一次检查
-        sleep $CHECK_INTERVAL
-    done
-}
+# 定义screen会话名称
+SCREEN_NAME="hyper"
+
+# 定义日志文件路径
+LOG_FILE="/root/aios-cli.log"
+
+# 定义最大重试次数
+MAX_RETRIES=5
 
 # 主菜单函数
 function main_menu() {
     while true; do
         clear
-        echo "推特：0xqianyi 免费开源，请勿相信收费"
+        echo "脚本由大赌社区哈哈哈哈编写，推特 @ferdie_jhovie，免费开源，请勿相信收费"
+        echo "如有问题，可联系推特，仅此只有一个号"
         echo "================================================================"
         echo "退出脚本，请按键盘 ctrl + C 退出即可"
         echo "请选择要执行的操作:"
-        echo "1. 部署hyperspace Aios节点"
-        echo "2. 查看运行日志"
-        echo "3. 查看所得积分"
-        echo "4. 删除节点"
+        echo "1. 部署hyperspace节点"
+        echo "2. 查看日志"
+        echo "3. 查看积分"
+        echo "4. 删除节点（停止节点）"
         echo "5. 退出脚本"
         echo "================================================================"
         read -p "请输入选择 (1/2/3/4/5): " choice
 
         case $choice in
-            1) deploy_hyperspace_node ;;
-            2) view_logs ;; 
-            3) view_points ;;
-            4) delete_node ;;
-            5) exit_script ;;
-            *) echo "无效选择，请重新输入！"; sleep 2 ;;
+            1)  deploy_hyperspace_node ;;
+            2)  view_logs ;;
+            3)  view_points ;;
+            4)  delete_node ;;
+            5)  exit_script ;;
+            *)  echo "无效选择，请重新输入！"; sleep 2 ;;
         esac
     done
 }
-
 # 部署hyperspace节点
 function deploy_hyperspace_node() {
-    # ... [原有部署代码保持不变] ...
+    # 执行安装命令
+    echo "正在执行安装命令：curl https://download.hyper.space/api/install | bash"
+    curl https://download.hyper.space/api/install | bash
+
+    # 获取安装后新添加的路径
+    NEW_PATH=$(bash -c 'source /root/.bashrc && echo $PATH')
+
+    # 更新当前shell的PATH
+    export PATH="$NEW_PATH"
+
+    # 验证aios-cli是否可用
+    if ! command -v aios-cli &> /dev/null; then
+        echo "aios-cli 命令未找到，正在重试..."
+        sleep 3
+        # 再次尝试更新PATH
+        export PATH="$PATH:/root/.local/bin"
+        if ! command -v aios-cli &> /dev/null; then
+            echo "无法找到 aios-cli 命令，请手动运行 'source /root/.bashrc' 后重试"
+            read -n 1 -s -r -p "按任意键返回主菜单..."
+            return
+        fi
+    fi
+}
+    # 提示输入屏幕名称，默认值为 'hyper'
+    read -p "请输入屏幕名称 (默认值: hyper): " screen_name
+    screen_name=${screen_name:-hyper}
+    echo "使用的屏幕名称是: $screen_name"
+
+    # 清理已存在的 'hyper' 屏幕会话
+    echo "检查并清理现有的 'hyper' 屏幕会话..."
+    screen -ls | grep "$screen_name" &>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "找到现有的 '$screen_name' 屏幕会话，正在停止并删除..."
+        screen -S "$screen_name" -X quit
+        sleep 2
+    else
+        echo "没有找到现有的 '$screen_name' 屏幕会话。"
+    fi
+        # 创建一个新的屏幕会话
+    echo "创建一个名为 '$screen_name' 的屏幕会话..."
+    screen -S "$screen_name" -dm
+
+    # 在屏幕会话中运行 aios-cli start
+    echo "在屏幕会话 '$screen_name' 中运行 'aios-cli start' 命令..."
+    screen -S "$screen_name" -X stuff "aios-cli start\n"
+
+    # 等待几秒钟确保命令执行
+    sleep 5
+
+    # 退出屏幕会话
+    echo "退出屏幕会话 '$screen_name'..."
+    screen -S "$screen_name" -X detach
+    sleep 5
+        # 确保环境变量已经生效
+    echo "确保环境变量更新..."
+    source /root/.bashrc
+    sleep 4  # 等待4秒确保环境变量加载
+
+    # 打印当前 PATH，确保 aios-cli 在其中
+    echo "当前 PATH: $PATH"
+
+    # 提示用户输入私钥并保存为 my.pem 文件
+    echo "请输入你的私钥（按 CTRL+D 结束）："
+    cat > my.pem
+        # 使用 my.pem 文件运行 import-keys 命令
+    echo "正在使用 my.pem 文件运行 import-keys 命令..."
+
+    # 运行 import-keys 命令
+    aios-cli hive import-keys ./my.pem
+    sleep 5
+
+    # 定义模型变量
+    model="hf:TheBloke/phi-2-GGUF:phi-2.Q4_K_M.gguf"
+
+    # 添加模型并重试
+    echo "正在通过命令 'aios-cli models add' 添加模型..."
+    while true; do
+        if aios-cli models add "$model"; then
+            echo "模型添加成功并且下载完成！"
+            break
+        else
+            echo "添加模型时发生错误，正在重试..."
+            sleep 3
+        fi
+    done
+        # 登录并选择等级
+    echo "正在登录并选择等级..."
+
+    # 登录到 Hive
+    aios-cli hive login
+
+    # 提示用户选择等级
+    echo "请选择等级（1-5）："
+    select tier in 1 2 3 4 5; do
+        case $tier in
+            1|2|3|4|5)
+                echo "你选择了等级 $tier"
+                aios-cli hive select-tier $tier
+                break
+                ;;
+            *)
+                echo "无效的选择，请输入 1 到 5 之间的数字。"
+                ;;
+        esac
+    done
+        # 连接到 Hive
+    aios-cli hive connect
+    sleep 5
+
+    # 停止 aios-cli 进程
+    echo "使用 'aios-cli kill' 停止 'aios-cli start' 进程..."
+    aios-cli kill
 
     # 在屏幕会话中运行 aios-cli start，并定向日志文件
     echo "在屏幕会话 '$screen_name' 中运行 'aios-cli start --connect'，并将输出定向到 '/root/aios-cli.log'..."
-    screen -S "$screen_name" -dm bash -c "aios-cli start --connect >> /root/aios-cli.log 2>&1 &"
+    screen -S "$screen_name" -X stuff "aios-cli start --connect >> /root/aios-cli.log 2>&1\n"
 
     echo "部署hyperspace节点完成，'aios-cli start --connect' 已在屏幕内运行，系统已恢复到后台。"
+        # 启动监控脚本
+    start_monitoring
+}
 
-    # 启动监控进程作为后台任务
-    (monitor_and_restart) &
-    
+# 启动监控脚本
+function start_monitoring() {
+    echo "启动监控脚本，每15分钟检查一次节点状态..."
+
+    while true; do
+        # 检查日志中的异常情况
+        if check_log_for_errors; then
+            echo "检测到日志异常，正在重启节点..."
+            restart_node
+        else
+            echo "Hyperspace节点正在运行，日志正常，无需操作。"
+        fi
+
+        # 等待15分钟
+        sleep $CHECK_INTERVAL
+    done
+}
+# 检查日志中的异常情况
+function check_log_for_errors() {
+    echo "开始检查日志文件: $LOG_FILE"
+
+    # 检查认证失败
+    if grep -q "Authentication failed" "$LOG_FILE"; then
+        echo "检测到认证失败"
+        return 1
+    fi
+
+    # 检查连接不到Hive
+    if grep -q "Failed to connect to Hive" "$LOG_FILE"; then
+        echo "检测到连接不到Hive"
+        return 1
+    fi
+
+    # 检查注册模型失败
+    if grep -q "Failed to register models" "$LOG_FILE"; then
+        echo "检测到注册模型失败"
+        return 1
+    fi
+
+    # 检查ping失败
+    if grep -q "Last pong received at" "$LOG_FILE"; then
+        echo "检测到ping失败"
+        return 1
+    fi
+
+    # 检查503服务不可用
+    if grep -q "status: Internal, message: \"error in response: status code 503 Service Unavailable\"" "$LOG_FILE"; then
+        echo "检测到503服务不可用"
+        return 1
+    fi
+
+    # 检查500内部服务器错误
+    if grep -q "status: Internal, message: \"HTTP error: 500 Internal Server Error\"" "$LOG_FILE"; then
+        echo "检测到500内部服务器错误"
+        return 1
+    fi
+
+    # 检查其他常见错误
+    if grep -q "Error" "$LOG_FILE"; then
+        echo "检测到其他常见错误"
+        return 1
+    fi
+
+    # 没有检测到异常
+    echo "日志正常"
+    return 0
+}
+
+# 重启节点
+function restart_node() {
+    echo "检测到日志异常，正在重启节点..."
+    local retries=0
+
+    while [ $retries -lt $MAX_RETRIES ]; do
+        # 重新加载环境变量
+        source /root/.bashrc
+
+        # 停止节点
+        echo "正在使用 'aios-cli kill' 停止节点..."
+        aios-cli kill
+        sleep 5
+
+        # 检查是否有残留进程
+        local pids=$(pgrep -x "aios-cli")
+        if [ -n "$pids" ]; then
+            echo "发现残留进程，正在手动停止..."
+            kill -9 $pids
+            sleep 5
+        fi
+
+        # 检查并停止 screen 会话
+        if screen -ls | grep -q "$SCREEN_NAME"; then
+            echo "发现残留的 screen 会话，正在停止..."
+            screen -S "$SCREEN_NAME" -X quit
+            sleep 5
+        fi
+
+        # 清空日志文件
+        > "$LOG_FILE"
+        # 重新启动节点
+        screen -S "$SCREEN_NAME" -dm bash -c "source /root/.bashrc && aios-cli start --connect >> $LOG_FILE 2>&1"
+        echo "Hyperspace节点已重启，重试次数: $retries"
+
+        # 检查节点是否成功启动
+        sleep 30  # 等待30秒，确保节点有足够时间启动
+        if check_log_for_errors; then
+            echo "节点启动失败，正在重试..."
+            retries=$((retries + 1))
+        else
+            echo "节点启动成功。"
+            return
+        fi
+    done
+
+    echo "节点启动失败，已达到最大重试次数。"
+    # 可以在这里添加通知机制，如发送邮件或短信
+}
+
+# 查看日志
+function view_logs() {
+    echo "正在查看日志..."
+    if [ -f "$LOG_FILE" ]; then
+        echo "显示日志的最后 200 行:"
+        tail -n 200 "$LOG_FILE"   # 显示最后 200 行日志
+    else
+        echo "日志文件不存在: $LOG_FILE"
+    fi
+
     # 提示用户按任意键返回主菜单
     read -n 1 -s -r -p "按任意键返回主菜单..."
     main_menu
@@ -96,6 +305,10 @@ function view_points() {
     source /root/.bashrc
     aios-cli hive points
     sleep 2
+
+    # 提示用户按任意键返回主菜单
+    read -n 1 -s -r -p "按任意键返回主菜单..."
+    main_menu
 }
 
 # 删除节点（停止节点）
@@ -105,25 +318,8 @@ function delete_node() {
     # 执行 aios-cli kill 停止节点
     aios-cli kill
     sleep 2
-    
+
     echo "'aios-cli kill' 执行完成，节点已停止。"
-
-    # 提示用户按任意键返回主菜单
-    read -n 1 -s -r -p "按任意键返回主菜单..."
-    main_menu
-}
-
-# 查看日志
-function view_logs() {
-    echo "正在查看日志..."
-    LOG_FILE="/root/aios-cli.log"   # 日志文件路径
-
-    if [ -f "$LOG_FILE" ]; then
-        echo "显示日志的最后 200 行:"
-        tail -n 200 "$LOG_FILE"   # 显示最后 200 行日志
-    else
-        echo "日志文件不存在: $LOG_FILE"
-    fi
 
     # 提示用户按任意键返回主菜单
     read -n 1 -s -r -p "按任意键返回主菜单..."
