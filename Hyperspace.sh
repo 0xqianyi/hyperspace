@@ -152,9 +152,9 @@ function deploy_hyperspace_node() {
 
     # 提示用户选择等级
     echo "请选择节点等级（1-5）："
-    select tier in 1 2 3 4 5; do
+    select tier in 1/30GB 2/20GB 3/8GB 4/4GB 5/2GB; do
         case $tier in
-            1/30GB|2/20GB|3/8GB|4/4GB|5/2GB)
+            1|2|3|4|5)
                 echo "你选择了等级 $tier"
                 aios-cli hive select-tier $tier
                 break
