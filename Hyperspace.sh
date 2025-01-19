@@ -79,7 +79,7 @@ function deploy_hyperspace_node() {
     # 清理已存在的 'hyper' 屏幕会话
     echo "检查并清理现有的 'hyper' 屏幕会话..."
     screen -ls | grep "$screen_name" &>/dev/null
-    if [ $? -eq 0 ]; then
+    if [ $? -eq 0 ];then
         echo "找到现有的 '$screen_name' 屏幕会话，正在停止并删除..."
         screen -S "$screen_name" -X quit
         sleep 2
@@ -152,14 +152,9 @@ function deploy_hyperspace_node() {
 
     # 提示用户选择等级
     echo "请选择节点等级（1-5）："
-    echo "1. 30GB"
-    echo "2. 20GB"
-    echo "3. 8GB"
-    echo "4. 4GB"
-    echo "5. 2GB"
     select tier in 1 2 3 4 5; do
         case $tier in
-            1|2|3|4|5)
+            1/30GB|2/20GB|3/8GB|4/4GB|5/2GB)
                 echo "你选择了等级 $tier"
                 aios-cli hive select-tier $tier
                 break
@@ -196,7 +191,7 @@ function start_monitoring() {
 
     while true; do
         # 检查日志中的异常情况
-        if check_log_for_errors; then
+        if ! check_log_for_errors; then
             echo "检测到日志异常，正在重启节点..."
             restart_node
         else
@@ -303,7 +298,7 @@ function restart_node() {
 
         # 检查节点是否成功启动
         sleep 30  # 等待30秒，确保节点有足够时间启动
-        if check_log_for_errors; then
+        if ! check_log_for_errors; then
             echo "节点启动失败，正在重试..."
             retries=$((retries + 1))
         else
