@@ -135,35 +135,31 @@ function deploy_hyperspace_node() {
         
         # 运行 import-keys 命令
         aios-cli hive import-keys ./my.pem
+        if [ $? -ne 0 ]; then
+            echo "import-keys 失败，重新安装..."
+            continue
+        fi
         sleep 5
 
         # 定义模型变量
         model="hf:TheBloke/phi-2-GGUF:phi-2.Q4_K_M.gguf"
 
-        # 添加模型并重试
+        # 添加模型
         echo "正在通过命令 'aios-cli models add' 添加模型..."
-        while true; do
-            if aios-cli models add "$model"; then
-                echo "模型添加成功并且下载完成！"
-                break
-            else
-                echo "添加模型时发生错误，正在重试..."
-                sleep 3
-            fi
-        done
+        if ! aios-cli models add "$model"; then
+            echo "添加模型失败，重新安装..."
+            continue
+        fi
+        echo "模型添加成功并且下载完成！"
 
         # 登录并选择等级
         echo "正在登录并选择等级..."
 
         # 登录到 Hive
-        while true; do
-            if aios-cli hive login; then
-                break
-            else
-                echo "登录失败，正在重试..."
-                sleep 3
-            fi
-        done
+        if ! aios-cli hive login; then
+            echo "登录失败，重新安装..."
+            continue
+        fi
 
         # 提示用户选择等级
         tier=$(get_user_input 3)
@@ -181,24 +177,16 @@ function deploy_hyperspace_node() {
         fi
 
         # 选择等级
-        while true; do
-            if aios-cli hive select-tier $tier; then
-                break
-            else
-                echo "选择等级失败，正在重试..."
-                sleep 3
-            fi
-        done
+        if ! aios-cli hive select-tier $tier; then
+            echo "选择等级失败，重新安装..."
+            continue
+        fi
 
         # 连接到 Hive
-        while true; do
-            if aios-cli hive connect; then
-                break
-            else
-                echo "连接到 Hive 失败，正在重试..."
-                sleep 3
-            fi
-        done
+        if ! aios-cli hive connect; then
+            echo "连接到 Hive 失败，重新安装..."
+            continue
+        fi
         sleep 5
 
         # 停止 aios-cli 进程
