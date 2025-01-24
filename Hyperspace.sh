@@ -128,25 +128,43 @@ function deploy_hyperspace_node() {
     echo "正在登录并选择等级..."
 
     # 登录到 Hive
-    aios-cli hive login
+    while true; do
+        if aios-cli hive login; then
+            break
+        else
+            echo "登录失败，正在重试..."
+            sleep 3
+        fi
+    done
 
     # 提示用户选择等级
     echo "请选择等级（1-5）："
-    select tier in 1 2 3 4 5; do
-        case $tier in
-            1|2|3|4|5)
+    while true; do
+        select tier in 1 2 3 4 5; do
+            if [[ $tier =~ ^[1-5]$ ]]; then
                 echo "你选择了等级 $tier"
-                aios-cli hive select-tier $tier
-                break
-                ;;
-            *)
+                if aios-cli hive select-tier $tier; then
+                    break 2  # 跳出两个循环
+                else
+                    echo "选择等级失败，正在重试..."
+                    break
+                fi
+            else
                 echo "无效的选择，请输入 1 到 5 之间的数字。"
-                ;;
-        esac
+            fi
+        done
+        sleep 3
     done
 
     # 连接到 Hive
-    aios-cli hive connect
+    while true; do
+        if aios-cli hive connect; then
+            break
+        else
+            echo "连接到 Hive 失败，正在重试..."
+            sleep 3
+        fi
+    done
     sleep 5
 
     # 停止 aios-cli 进程
